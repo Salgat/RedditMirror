@@ -1,0 +1,8 @@
+{
+  "name": "RedditMirrorAPI",
+  "description": "Reddit mirroring API",
+  "repository": "https://github.com/Salgat/RedditMirrorAPI",
+  "logo": "",
+  "keywords": ["node", "express", "static"],
+  "image": "heroku/nodejs"
+}
