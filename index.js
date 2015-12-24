@@ -135,7 +135,7 @@ function getRedditPage(count, after, retries) {
 /**
  * Returns a filtered and processed list of urls
  */
-var filePattern = new RegExp(".(gif|jpg|jpeg|png|bmp|gifv|mp3|mp4|avi|doc|swf|xls|ppt|pdf)$"); // Todo: Handle gifv and other html5 images
+var filePattern = new RegExp(".(gif|jpg|jpeg|png|bmp|gifv|mp3|mp4|avi|doc|swf|xls|ppt|pdf)$");
 filePattern.ignoreCase = true;
 function processRedditUrls(links) {
   console.log('processing link count on ' + new Date() + ': ' + links.length);
