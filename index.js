@@ -34,8 +34,6 @@ fs.readFile('topAlexaSites.txt', function (err, data) {
    alexaRankings = data.toString().split(',');
 });
 
-});
-
 /**
  * Read in Ignored Domains text file to a local array.
  */
@@ -85,8 +83,10 @@ app.post('/redditmirror/v1/mirror', function(request, response) {
  */
 var redditUrls = [];
 var currentPage = {count: 0, after: ''};
+var archivedLinksCount = 0;
 function archiveReddit() {
   console.log('retrieving /r/all pages at: ' + new Date());
+  archivedLinksCount = 0;
   getRedditPage(0, "", 0);
     
   // Call this function again in 10 minutes
@@ -96,22 +96,32 @@ archiveReddit();
 
 function getRedditPage(count, after, retries) {
   var url = 'https://www.reddit.com/r/all/.json?count=' + count + '&after=' + after;
+  console.log("Getting reddit page: " + url);
   request(url, function (error, response, body) {
     //Check for error
     if(error){
-        return console.log('Error:', error);
-    }
-
-    //Check for right status code
-    if(response.statusCode !== 200){
-        // If failed, wait and retry again
+      if (error.code == 'ECONNRESET') {
+        // No response from server, try again
         if (retries < 5) {
           setTimeout(function() {
             getRedditPage(count, after, retries+1);
           }, 5000);
         }
+      }
         
-        return console.log('Invalid Status Code Returned:', response.statusCode + ' for count: ' + count);
+      return console.log('Error:', error);
+    }
+
+    //Check for right status code
+    if(response.statusCode !== 200){
+      // If failed, wait and retry again
+      if (retries < 5) {
+        setTimeout(function() {
+          getRedditPage(count, after, retries+1);
+        }, 5000);
+      }
+      
+      return console.log('Invalid Status Code Returned:', response.statusCode + ' for count: ' + count);
     }
 
     var json = JSON.parse(body);
@@ -122,16 +132,21 @@ function getRedditPage(count, after, retries) {
 /**
  * Returns a filtered and processed list of urls
  */
+var filePattern = new RegExp(".(gif|jpg|jpeg|png|bmp|gifv|mp3|mp4|avi|doc|swf|xls|ppt|pdf)$"); // Todo: Handle gifv and other html5 images
+filePattern.ignoreCase = true;
 function processRedditUrls(links) {
   console.log('processing link count on ' + new Date() + ': ' + links.length);
   var filteredLinks = [];
   links.forEach(function(link) {
-    // Get domain and protocoless url
-    var domain = getDomain(link);
+    var parsedUrl = urlParser.parse(link);
+    var domain = getDomain(parsedUrl.hostname);
     var newLink = link.replace(/.*?:\/\//g, "");
     
-    // Filter out ignored domains
-    if (ignoredDomains.indexOf(domain) >= 0) {
+    if (filePattern.test(parsedUrl.pathname.toLowerCase())) {
+      // Filter out files
+       newLink = null;
+    } else if (ignoredDomains.indexOf(domain) >= 0) {
+      // Filter out ignored domains
       newLink = null;
     } else if (alexaRankings.indexOf(domain) >= 0) {
       newLink = null;
@@ -141,8 +156,8 @@ function processRedditUrls(links) {
   });
   
   console.log('processed link count on ' + new Date() + ': ' + filteredLinks.length);
-  console.log(filteredLinks);
-  return filteredLinks;
+  //console.log(filteredLinks);
+  archiveLinks(filteredLinks);
 }
 
 /**
@@ -152,17 +167,8 @@ function processRedditUrls(links) {
  * 
  * Source: http://www.primaryobjects.com/2012/11/19/parsing-hostname-and-domain-from-a-url-with-javascript/
  */
-function getHostName(url) {
-    var match = url.match(/:\/\/(www[0-9]?\.)?(.[^/:]+)/i);
-    if (match != null && match.length > 2 && typeof match[2] === 'string' && match[2].length > 0) {
-    return match[2];
-    }
-    else {
-        return null;
-    }
-}
-function getDomain(url) {
-    var hostName = getHostName(url);
+function getDomain(hostName) {
+    //var hostName = getHostName(url);
     var domain = hostName;
     
     if (hostName != null) {
@@ -192,4 +198,78 @@ function retrievedPage(json, count) {
   } else {
     processRedditUrls(redditUrls);
   }
+}
+
+/**
+ * From the provided links, achives the first 5 that are not already archived.
+ */ 
+function archiveLinks(links) {
+  links.forEach(function(link) {
+    archiveLink(link);
+  });
+}
+
+/**
+ * Attempt to archive link.
+ */
+function archiveLink(link) {
+  client.get(link, function(err, reply) {
+    if (!err && reply != null) {
+      console.log('archive exists for: ' + link + " = " + reply);
+    } else {
+      console.log('archive does not exist for: ' + link);
+      addToArchive(link);
+    }
+  });
+}
+
+/**
+ * Submit a POST for a link to archive and then add it to the redis archive.
+ */
+function addToArchive(link) {
+  if (archivedLinksCount >= 5) return;
+  ++archivedLinksCount;
+  console.log('Adding to archive.is for link: ' + link);
+  var options = {
+    url: 'https://archive.is/submit/?=',
+    form: {url:link},
+    headers: {
+      Accept:'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept-Encoding':'gzip, deflate',
+      'Accept-Language':'en-US,en;q=0.8,zh-CN;q=0.6',
+      'Cache-Control':'no-cache',
+      Connection:'keep-alive',
+      'Content-Length':18,
+      'Content-Type':'application/x-www-form-urlencoded',
+      Host:'archive.is',
+      Origin:'http://archive.is',
+      Pragma:'no-cache',
+      Referer:'http://archive.is/',
+      'Upgrade-Insecure-Requests':1,
+      'User-Agent':'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36'
+    }
+  }
+  request.post(options, function(err,httpResponse,body){
+    if (!err) {
+      console.log('POST has no errors, attempting to get response for header:' + JSON.stringify(httpResponse.headers));
+      var result = JSON.parse(JSON.stringify(httpResponse.headers))['Refresh'];
+      if (result != null) {
+        console.log('Recieved response: ' + result);
+        var archiveLink = result.split('=')[1];
+        addToLocalArchive(link, archiveLink);
+      }
+    } else {
+      console.log('Failed to archive for link: ' + link);
+    }
+  });
+}
+
+function addToLocalArchive(link, archiveLink) {
+  client.set(link, archiveLink, function(err, reply) {
+    if (!err) {
+      console.log('saved for: ' + link + ', ' + archiveLink);
+    } else {
+      console.log('error adding archive for: ' + link + ', ' + archiveLink);
+    }
+  });
 }
