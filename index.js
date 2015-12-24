@@ -47,16 +47,20 @@ fs.readFile('ignoredDomains.txt', function (err, data) {
 
 /**
  * GET Archive Link.
+ * 
+ * Note: The provided link must have its protocol removed (since
+ * there is no reason to distinguish between http and https).
  */
 app.get('/redditmirror/v1/mirror', function(request, response) {
   var redditUrl = request.query["url"];
   client.get(redditUrl, function(err, reply) {
-    if (!err) {
-      console.log('url exists for: ' + redditUrl);
+    if (!err && reply != null) {
+      // Return a 200 sucess response with the url
       response.send({url: reply});
     } else {
-      console.log('url does not exist for: ' + redditUrl);
-      response.send({url: null});
+      // Return a response "Not Found"
+      response.status(404);
+      response.send();
     }
   });
 });
@@ -64,11 +68,11 @@ app.get('/redditmirror/v1/mirror', function(request, response) {
 /**
  * POST Archive Link for debugging purposes.
  */
-app.post('/redditmirror/v1/mirror', function(request, response) {
+/*app.post('/redditmirror/v1/mirror', function(request, response) {
   var redditUrl = request.query["url"];
   var archiveUrl = request.query["archiveUrl"];
   client.set(redditUrl, archiveUrl, function(err, reply) {
-    if (!err) {
+    if (!err && reply != null) {
       console.log('saved for: ' + redditUrl + ', ' + archiveUrl);
       response.send({url: reply});
     } else {
@@ -76,7 +80,7 @@ app.post('/redditmirror/v1/mirror', function(request, response) {
       response.send({url: null});
     }
   });
-});
+});*/
 
 /**
  * On a regular interval, updates archive links with latest /r/all posts
@@ -89,14 +93,13 @@ function archiveReddit() {
   archivedLinksCount = 0;
   getRedditPage(0, "", 0);
     
-  // Call this function again in 10 minutes
-  setTimeout(archiveReddit, 600000);
+  // Call this function again in 15 minutes
+  setTimeout(archiveReddit, 15*60000);
 }
 archiveReddit();
 
 function getRedditPage(count, after, retries) {
   var url = 'https://www.reddit.com/r/all/.json?count=' + count + '&after=' + after;
-  console.log("Getting reddit page: " + url);
   request(url, function (error, response, body) {
     //Check for error
     if(error){
@@ -156,7 +159,6 @@ function processRedditUrls(links) {
   });
   
   console.log('processed link count on ' + new Date() + ': ' + filteredLinks.length);
-  //console.log(filteredLinks);
   archiveLinks(filteredLinks);
 }
 
@@ -168,7 +170,6 @@ function processRedditUrls(links) {
  * Source: http://www.primaryobjects.com/2012/11/19/parsing-hostname-and-domain-from-a-url-with-javascript/
  */
 function getDomain(hostName) {
-    //var hostName = getHostName(url);
     var domain = hostName;
     
     if (hostName != null) {
@@ -193,7 +194,7 @@ function retrievedPage(json, count) {
   });
   
   // Continue getting the first 1000 urls then process them
-  if (count < 1000) {
+  if (count < 5000) {
     getRedditPage(count+100, json['data']['after'], 0);
   } else {
     processRedditUrls(redditUrls);
@@ -215,9 +216,7 @@ function archiveLinks(links) {
 function archiveLink(link) {
   client.get(link, function(err, reply) {
     if (!err && reply != null) {
-      console.log('archive exists for: ' + link + " = " + reply);
     } else {
-      console.log('archive does not exist for: ' + link);
       addToArchive(link);
     }
   });
@@ -227,12 +226,9 @@ function archiveLink(link) {
  * Submit a POST for a link to archive and then add it to the redis archive.
  */
 function addToArchive(link) {
-  if (archivedLinksCount >= 5) {
-    console.log("Exceeded archived links limit: " + archivedLinksCount);
-    return;
-  }
+  if (archivedLinksCount >= 20) return;
   ++archivedLinksCount;
-  console.log('Adding to archive.is for link: ' + link);
+  
   var options = {
     url: 'https://archive.is/submit/',
     form: {url:link},
@@ -248,22 +244,17 @@ function addToArchive(link) {
   }
   request.post(options, function(err,httpResponse,body){
     if (!err) {
-      console.log('POST has no errors, attempting to get response for header:' + JSON.stringify(httpResponse.headers));
       var header = JSON.parse(JSON.stringify(httpResponse.headers));
       var refresh = header['refresh'];
       var locationUrl = header['location'];
       if (refresh != null) {
-        console.log('Recieved response: ' + refresh);
         var archiveLink = refresh.split('=')[1];
         addToLocalArchive(link, archiveLink);
       } else if (locationUrl != null) {
-        console.log('Recieved location response: ' + locationUrl);
         addToLocalArchive(link, locationUrl);
       } else {
-        console.log('Failed to get refresh');
       }
     } else {
-      console.log('Failed to archive for link: ' + link);
     }
   });
 }
@@ -273,7 +264,6 @@ function addToLocalArchive(link, archiveLink) {
     if (!err) {
       console.log('saved for: ' + link + ', ' + archiveLink);
     } else {
-      console.log('error adding archive for: ' + link + ', ' + archiveLink);
     }
   });
 }
