@@ -11,7 +11,7 @@ Install both of these prior to running this project.
 ### Running
 * Open the command line, change the directory to where this project is located, and enter command "npm start"
 
-### Description
+## Description
 RedditMirrorAPI works by checking Reddit's /r/all for the 5000 most popular website submissions. After using GETs to retrieve the links from Reddit, the array of links is filtered three different ways. 
 
 1. First, the link is checked to see if it is a media format, such as a jpg or gif or video extension. All media is blocked (since the mirror is not meant for media). 
