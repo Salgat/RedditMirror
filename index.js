@@ -227,24 +227,21 @@ function archiveLink(link) {
  * Submit a POST for a link to archive and then add it to the redis archive.
  */
 function addToArchive(link) {
-  if (archivedLinksCount >= 5) return;
+  if (archivedLinksCount >= 5) {
+    console.log("Exceeded archived links limit: " + archivedLinksCount);
+    return;
+  }
   ++archivedLinksCount;
   console.log('Adding to archive.is for link: ' + link);
   var options = {
-    url: 'https://archive.is/submit/?=',
+    url: 'https://archive.is/submit/',
     form: {url:link},
     headers: {
       Accept:'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Encoding':'gzip, deflate',
       'Accept-Language':'en-US,en;q=0.8,zh-CN;q=0.6',
       'Cache-Control':'no-cache',
-      Connection:'keep-alive',
-      'Content-Length':18,
       'Content-Type':'application/x-www-form-urlencoded',
-      Host:'archive.is',
-      Origin:'http://archive.is',
       Pragma:'no-cache',
-      Referer:'http://archive.is/',
       'Upgrade-Insecure-Requests':1,
       'User-Agent':'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36'
     }
@@ -252,11 +249,18 @@ function addToArchive(link) {
   request.post(options, function(err,httpResponse,body){
     if (!err) {
       console.log('POST has no errors, attempting to get response for header:' + JSON.stringify(httpResponse.headers));
-      var result = JSON.parse(JSON.stringify(httpResponse.headers))['Refresh'];
-      if (result != null) {
-        console.log('Recieved response: ' + result);
-        var archiveLink = result.split('=')[1];
+      var header = JSON.parse(JSON.stringify(httpResponse.headers));
+      var refresh = header['refresh'];
+      var locationUrl = header['location'];
+      if (refresh != null) {
+        console.log('Recieved response: ' + refresh);
+        var archiveLink = refresh.split('=')[1];
         addToLocalArchive(link, archiveLink);
+      } else if (locationUrl != null) {
+        console.log('Recieved location response: ' + locationUrl);
+        addToLocalArchive(link, locationUrl);
+      } else {
+        console.log('Failed to get refresh');
       }
     } else {
       console.log('Failed to archive for link: ' + link);
