@@ -29,3 +29,6 @@ RedditMirrorAPI works by checking Reddit's /r/all for the 5000 most popular webs
 3. Finally, the link is compared against a list of the top [Alexa Rank](https://www.alexa.com) domains. The assumption is that these sites with the most traffic are also likely to not go down, since they aren't susceptible to the "Reddit effect" where a huge surge in traffic brings down a small website.
 
 After filtering down the links to a small set that are eligible for archiving, these links are checked against the redis database to check if they already have archives setup. If they don't, the first 20 non-archived links are POSTed to [archive.is](http://archive.is/) to be archived on their site. Each POST request returns a link to the archive, which is stored in the database to be recalled upon a GET request (GET http://localhost:5000/redditmirror/v1/mirror?url=myarchivedlink.com/) for that site's mirror. After 15 minutes, the whole process is repeated to archive the next 20 eligible submissions.
+
+### Purpose
+This API was developed specifically for [RedditBoost](https://github.com/Salgat/RedditBoost), a chrome extension for reddit which, among it's over features, provides an interface to load available mirrors for reddit submissions.
