@@ -1,6 +1,16 @@
 # RedditMirrorAPI
 A mirror API for Reddit's top submissions
 
+## Example
+A live example is available at http://redditmirror.salgat.net.
+
+To test, use your favorite REST client (I use the Chrome App "Advanced Rest Client") and do the following GET request,
+* GET http://redditmirror.salgat.net/redditmirror/v1/mirror?url=www.digitalnewsarena.com/2015/12/a-working-light-based-processor.html
+
+You should see the response,
+
+  ``{"url":"https://archive.is/1mMCi"}``
+
 ## Installation And Running
 
 ### Requirements
