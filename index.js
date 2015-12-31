@@ -2,7 +2,9 @@ var express = require('express');
 var app = express();
 var request = require('request');
 var fs = require('fs');
-var urlParser = require('url')
+var urlParser = require('url');
+var cors = require('cors');
+app.use(cors());
 
 var client;
 if (process.env.REDIS_URL) {
